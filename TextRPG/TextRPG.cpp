@@ -6,14 +6,34 @@
 
 using namespace std;
 
-class Skill;
+class Player;
+class Monster;
+
+class Skill
+{
+protected:
+	string name;
+	int mpConsume;
+
+public:
+	Skill(string n, int m) : name(n), mpConsume(m) {}
+
+	virtual ~Skill() {}
+
+	virtual bool useSkill(Player& p, Monster& m) = 0;
+
+	const string& getName() const { return name; }
+	int getMpConsume() const { return mpConsume; }
+
+};
 
 class Player
 {
 private:
 	string name;
 	int level;
-	int exp;
+	float maxExp;
+	float exp;
 	int maxHp;
 	int currentHp;
 	int maxMp;
@@ -24,7 +44,7 @@ private:
 	vector<Skill*> skillList;
 
 public:
-	Player(string n, int lv, int ex, int mh, int ch, int mm, int cm, int a, int d, int s) : name(n), level(lv), exp(ex), maxHp(mh), currentHp(ch), maxMp(mm), currentMp(cm), att(a), def(d), speed(s) {}
+	Player(string n, int lv,float mex, float ex, int mh, int ch, int mm, int cm, int a, int d, int s) : name(n), level(lv),maxExp(mex), exp(ex), maxHp(mh), currentHp(ch), maxMp(mm), currentMp(cm), att(a), def(d), speed(s) {}
 
 	int takeDamage(int damage)
 	{
@@ -58,6 +78,13 @@ public:
 		currentMp -= amout;
 
 	};
+	void getExp(float amout)
+	{
+		exp += amout;
+		cout << amout << "의 경험치를 획득했습니다!" << endl;
+	};
+
+	void levelUp();
 
 	void PlayerDie()
 	{
@@ -66,6 +93,7 @@ public:
 	}
 
 	string getName() { return name; }
+	int getLevel() { return level; }
 	int getMaxHp() { return maxHp; }
 	int getCurrentHp() { return currentHp; }
 	int getCurrentMp() { return currentMp; }
@@ -113,6 +141,7 @@ public:
 
 	string getName() { return name; }
 	int getHp() { return hp; }
+	int getMonsterExp() { return exp; }
 	int getAtt() { return att; }
 	int getSpeed() { return speed; }
 
@@ -121,7 +150,7 @@ public:
 class Slime : public Monster
 {
 public:
-	Slime() : Monster("슬라임", 10, 20, 10, 5, 5, 3) {}
+	Slime() : Monster("슬라임", 100, 20, 10, 5, 5, 3) {} //이름 경험치 체력 마나 공격력 방어력 스피드
 };
 
 class Ork : public Monster
@@ -134,24 +163,6 @@ class Wolf : public Monster
 {
 public:
 	Wolf() : Monster("늑대", 50, 15, 20, 30, 10, 15) {}
-
-};
-
-class Skill
-{
-protected:
-	string name;
-	int mpConsume;
-
-public:
-	Skill(string n, int m) : name(n), mpConsume(m) {}
-
-	virtual ~Skill() {}
-
-	virtual bool useSkill(Player& p, Monster& m) = 0;
-
-	string getName() { return name; }
-	int getMpConsume() { return mpConsume; }
 
 };
 
@@ -209,6 +220,67 @@ public:
 	}
 };
 
+class Boom : public Skill
+{
+public:
+	Boom() : Skill("폭발", 100) {}
+
+	bool useSkill(Player& p, Monster& m) override
+	{
+		if (p.getCurrentMp() >= mpConsume)
+		{
+			p.useMp(mpConsume);
+
+			int damage = p.getAtt() + 100;
+			int finalDmg = m.takeDamage(damage);
+
+			p.takeDamage(50);
+			cout << mpConsume << "MP를 사용해 " << getName() << "을(를) 사용합니다" << endl << endl;
+			cout << m.getName() << "에게 " << finalDmg << "의 피해!" << endl;
+			cout << m.getName() << " 남은 HP: " << m.getHp() << endl;
+			return true;
+
+		}
+		else
+		{
+			cout << "MP가 부족합니다." << endl;
+			return false;
+		}
+	}
+};
+
+void Player::levelUp()
+{
+		while (exp >= maxExp)
+		{
+			exp = exp - maxExp;
+			level++;
+			maxExp = maxExp * 1.2f; //경험치 요구량 증가
+
+			maxHp += 10; // 레벨업 스텟 상승
+			maxMp += 10;
+			att += 5;
+			def += 5;
+			speed += 1;
+
+			cout << "레벨 업!" << endl;
+			cout << "현재 레벨: " << level << endl;
+			cout << name << "의 스텟이 증가합니다." << level << endl;
+
+			if (getLevel() == 2)
+			{
+				learnSkill(new Strike());
+				cout << "스킬을 획득했습니다" << endl;
+			}
+			
+
+			if (getLevel() == 3)
+			{
+				learnSkill(new Boom());
+				cout << "스킬을 획득했습니다" << endl;
+			}
+		}
+}
 
 class Event
 {
@@ -287,6 +359,8 @@ public:
 
 		if (m.getHp() <= 0) {
 			m.MonsterDie();
+			p.getExp(m.getMonsterExp());
+			p.levelUp();
 			return true;
 		}
 
@@ -383,6 +457,7 @@ public:
 		}
 	}
 };
+
 int main()
 {
 	srand((unsigned int)time(NULL));
@@ -392,9 +467,9 @@ int main()
 	cout << "당신의 이름을 입력하시오.: ";
 	cin >> nickname;
 
-	Player player(nickname, 1, 0, 100, 100, 100, 100, 20, 20, 10); // 레벨 경험치 최대체력 현재체력 최대마나 현재마나 공격력 방어력 스피드 
+	Player player(nickname, 1, 100.0f, 0.0f, 100, 100, 100, 100, 20, 20, 10); // 레벨 경험치요구량 경험치 최대체력 현재체력 최대마나 현재마나 공격력 방어력 스피드 
 	player.learnSkill(new Fireball());
-	player.learnSkill(new Strike());
+
 	cout << nickname << "님 환영합니다." << endl;
 
 	while (true)
